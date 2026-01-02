@@ -1,0 +1,34 @@
+---
+layout: default
+---
+
+<article class="tag-page">
+  <header>
+    <h1>{{ page.title }}</h1>
+    {% if page.description %}
+      <p class="tag-description">{{ page.description }}</p>
+    {% endif %}
+  </header>
+
+  {% if content %}
+    <div class="tag-body">
+      {{ content }}
+    </div>
+  {% endif %}
+
+  <section class="tag-related">
+    <h3>相关笔记</h3>
+    {% assign tag_key = page.tag | default: page.title %}
+    {% assign tagged_notes = site.tags[tag_key] | where_exp: "item", "item.collection and item.collection.label == 'notes'" %}
+    {% if tagged_notes and tagged_notes != empty %}
+      <ul>
+        {% for note in tagged_notes %}
+          <li><a class="internal-link" href="{{ note.url | relative_url }}">{{ note.title }}</a></li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="tag-empty">还没有笔记使用这个标签。</p>
+    {% endif %}
+  </section>
+</article>
+

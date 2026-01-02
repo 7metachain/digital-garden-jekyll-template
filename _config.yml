@@ -1,6 +1,7 @@
-title:               My digital garden
+title:               异世界观察手记
 include:             ['_pages']
-exclude:             ['_includes/notes_graph.json']
+exclude:             ['_includes/notes_graph.json', '_includes/tags_graph.json']
+encoding:            "utf-8"
 # You may need to change the base URL depending on your deploy configuration.
 baseurl:             ''
 

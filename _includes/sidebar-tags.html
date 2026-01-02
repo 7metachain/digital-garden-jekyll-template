@@ -1,0 +1,35 @@
+<div class="sidebar-section">
+  <div class="sidebar-section-title">🏷 Tags</div>
+
+  {% assign sorted_tags = site.tags | sort %}
+  {% if sorted_tags and sorted_tags != empty %}
+    <ul class="tag-tree">
+      {% for tag in sorted_tags %}
+        {% assign tag_name = tag[0] %}
+        {% assign posts = tag[1] %}
+
+        <li class="tag-node">
+          <span class="tag-name">
+            <a class="internal-link" href="{{ '/tags/' | append: tag_name | slugify | relative_url }}">
+              {{ tag_name }}
+            </a>
+            <span class="tag-count">({{ posts | size }})</span>
+          </span>
+
+          <ul class="tag-posts">
+            {% for post in posts %}
+              <li>
+                <a class="internal-link" href="{{ post.url | relative_url }}">
+                  {{ post.title }}
+                </a>
+              </li>
+            {% endfor %}
+          </ul>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="tag-empty">暂无标签，给笔记添加 tags 后这里会自动更新。</p>
+  {% endif %}
+</div>
+

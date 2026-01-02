@@ -1,5 +1,9 @@
 ---
 title: A note about cats
+tags:
+  - Animals
+  - Habits
+  - Poetry
 ---
 
 This is a second note with a poem with cats. 

@@ -1,4 +1,9 @@
 ---
+title: Move your body every day
+tags:
+  - Health
+  - Habits
+  - Routine
 ---
 
 Move your body every day. Benefits include:

@@ -1,8 +1,15 @@
 # frozen_string_literal: true
+
+require 'jekyll/page_without_a_file'
+require 'set'
+
 class BidirectionalLinksGenerator < Jekyll::Generator
   def generate(site)
     graph_nodes = []
     graph_edges = []
+    tag_graph_nodes = []
+    tag_graph_edges = []
+    tag_note_ids = Set.new
 
     all_notes = site.collections['notes'].docs
     all_pages = site.pages
@@ -81,11 +88,14 @@ class BidirectionalLinksGenerator < Jekyll::Generator
       end
 
       # Nodes: Graph
-      graph_nodes << {
+      note_node = {
         id: note_id_from_note(current_note),
         path: "#{site.baseurl}#{current_note.url}#{link_extension}",
         label: current_note.data['title'],
-      } unless current_note.path.include?('_notes/index.html')
+        type: 'note',
+      }
+
+      graph_nodes << note_node unless current_note.path.include?('_notes/index.html')
 
       # Edges: Jekyll
       current_note.data['backlinks'] = notes_linking_to_current_note
@@ -99,13 +109,95 @@ class BidirectionalLinksGenerator < Jekyll::Generator
       end
     end
 
+    site.tags.each do |tag_name, tagged_docs|
+      tag_id = tag_id_from_name(tag_name)
+      tag_slug = Jekyll::Utils.slugify(tag_name)
+
+      tag_graph_nodes << {
+        id: tag_id,
+        path: "#{site.baseurl}/tags/#{tag_slug}#{link_extension}",
+        label: tag_name,
+        type: 'tag',
+      }
+
+      tagged_docs.each do |doc|
+        next unless doc.respond_to?(:data)
+        next unless doc.collection&.label == 'notes'
+
+        note_id = note_id_from_note(doc)
+
+        unless tag_note_ids.include?(note_id)
+          tag_graph_nodes << {
+            id: note_id,
+            path: "#{site.baseurl}#{doc.url}#{link_extension}",
+            label: doc.data['title'],
+            type: 'note',
+          }
+          tag_note_ids.add(note_id)
+        end
+
+        tag_graph_edges << {
+          source: note_id,
+          target: tag_id,
+        }
+      end
+    end
+
     File.write('_includes/notes_graph.json', JSON.dump({
       edges: graph_edges,
       nodes: graph_nodes,
+    }))
+
+    File.write('_includes/tags_graph.json', JSON.dump({
+      edges: tag_graph_edges,
+      nodes: tag_graph_nodes,
     }))
   end
 
   def note_id_from_note(note)
     note.data['title'].bytes.join
+  end
+
+  def tag_id_from_name(name)
+    "tag-#{name.bytes.join}"
+  end
+end
+
+class TagPagesGenerator < Jekyll::Generator
+  priority :lowest
+  safe true
+
+  def generate(site)
+    link_extension = site.config['use_html_extension'] ? '.html' : ''
+
+    site.tags.each_key do |tag|
+      tag_slug = Jekyll::Utils.slugify(tag)
+      dir = File.join('tags', tag_slug)
+
+      next if tag_page_exists?(site, tag, dir)
+
+      site.pages << build_tag_page(site, dir, tag, link_extension)
+    end
+  end
+
+  private
+
+  def tag_page_exists?(site, tag, dir)
+    site.pages.any? do |page|
+      page.data['tag'] == tag ||
+        page.url == "/#{dir}/" ||
+        page.url == "/#{dir}" ||
+        page.url == "/#{dir}.html"
+    end
+  end
+
+  def build_tag_page(site, dir, tag, link_extension)
+    Jekyll::PageWithoutAFile.new(site, site.source, dir, 'index.html').tap do |page|
+      page.data['layout'] = 'tag'
+      page.data['title'] = tag
+      page.data['tag'] = tag
+      page.data['type'] = 'tag'
+      page.data['permalink'] = "/#{dir}#{link_extension}"
+    end
   end
 end

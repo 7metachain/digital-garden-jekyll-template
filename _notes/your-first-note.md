@@ -1,5 +1,9 @@
 ---
 title: Your first seed
+tags:
+  - Guide
+  - Meta
+  - Onboarding
 ---
 
 ### Welcome!

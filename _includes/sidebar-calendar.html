@@ -1,0 +1,370 @@
+<div class="sidebar-section calendar-section">
+  <div class="sidebar-section-title">📅 日历</div>
+  <div id="sidebar-calendar" class="calendar-widget" aria-label="Monthly calendar"></div>
+</div>
+
+<script>
+  (function renderSidebarCalendar() {
+    const container = document.getElementById("sidebar-calendar");
+    if (!container) return;
+
+    const state = {
+      viewDate: new Date(),
+      selectedDate: new Date(),
+    };
+
+    const SOLAR_TERM_NAMES = [
+      "小寒", "大寒", "立春", "雨水", "惊蛰", "春分",
+      "清明", "谷雨", "立夏", "小满", "芒种", "夏至",
+      "小暑", "大暑", "立秋", "处暑", "白露", "秋分",
+      "寒露", "霜降", "立冬", "小雪", "大雪", "冬至"
+    ];
+    const SOLAR_TERM_INFO = [
+      0, 21208, 42467, 63836, 85337, 107014, 128867, 150921,
+      173149, 195551, 218072, 240693, 263343, 285989, 308563,
+      331033, 353350, 375494, 397447, 419210, 440795, 462224,
+      483532, 504758,
+    ];
+    const SOLAR_TERM_BASE = Date.UTC(1900, 0, 6, 2, 5);
+    const SOLAR_YEAR_MS = 31556925974.7;
+    const solarTermCache = new Map();
+
+    function computeSolarTerms(year) {
+      if (solarTermCache.has(year)) return solarTermCache.get(year);
+      const monthMap = {};
+      SOLAR_TERM_INFO.forEach((offsetMin, idx) => {
+        const ms = SOLAR_TERM_BASE + SOLAR_YEAR_MS * (year - 1900) + offsetMin * 60000;
+        const d = new Date(ms);
+        const m = d.getUTCMonth() + 1;
+        const day = d.getUTCDate();
+        if (!monthMap[m]) monthMap[m] = [];
+        monthMap[m].push({ d: day, n: SOLAR_TERM_NAMES[idx] });
+      });
+      solarTermCache.set(year, monthMap);
+      return monthMap;
+    }
+
+    const lunarPartsFormatter = new Intl.DateTimeFormat("zh-Hans-u-ca-chinese", {
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+    });
+    const lunarDayFormatter = new Intl.DateTimeFormat("zh-Hans-u-ca-chinese", {
+      day: "numeric",
+    });
+
+    const chineseDigits = { 0: "〇", 1: "一", 2: "二", 3: "三", 4: "四", 5: "五", 6: "六", 7: "七", 8: "八", 9: "九" };
+    const lunarMonthNames = ["正月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "冬月", "腊月"];
+    const heavenlyStems = ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"];
+    const earthlyBranches = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"];
+
+    const parseLunarNumber = (value) => {
+      if (value === undefined || value === null) return 0;
+      const str = String(value).replace(/[^一二三四五六七八九十廿卅〇0-9]/g, "");
+      const num = Number(str);
+      if (!Number.isNaN(num)) return num;
+
+      const map = { "〇": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10, "廿": 20, "卅": 30, "三十": 30 };
+      if (map[str] !== undefined) return map[str];
+      if (str.startsWith("十")) return 10 + (map[str.slice(1)] || 0);
+      if (str.startsWith("廿")) return 20 + (map[str.slice(1)] || 0);
+      if (str.startsWith("卅")) return 30 + (map[str.slice(1)] || 0);
+      return 0;
+    };
+
+    const ganzhiYear = (y) => {
+      const stem = heavenlyStems[(y - 4) % 10];
+      const branch = earthlyBranches[(y - 4) % 12];
+      return `${stem}${branch}年`;
+    };
+
+    const ganzhiMonth = (y, lunarMonth) => {
+      // 月支从寅月开始（索引2），月干从寅月起依年干推算
+      const branchIdx = (lunarMonth + 1) % 12;
+      const yearStemIdx = (y - 4) % 10;
+      const stemStartByYearStem = [2, 4, 6, 8, 0]; // 甲乙丙丁戊己庚辛壬癸 -> 丙戊庚壬甲
+      const stemStart = stemStartByYearStem[yearStemIdx % 5];
+      const stemIdx = (stemStart + (lunarMonth - 1)) % 10;
+      return `${heavenlyStems[stemIdx]}${earthlyBranches[branchIdx]}月`;
+    };
+
+    const ganzhiDay = (date) => {
+      // 基准：1984-02-02 为甲子日
+      const base = new Date(Date.UTC(1984, 1, 2));
+      const diffDays = Math.floor((date - base) / 86400000);
+      const stem = heavenlyStems[(diffDays % 10 + 10) % 10];
+      const branch = earthlyBranches[(diffDays % 12 + 12) % 12];
+      return `${stem}${branch}日`;
+    };
+
+    const toChineseYear = (yearNumber) => {
+      return String(yearNumber)
+        .split("")
+        .map((d) => chineseDigits[d] || d)
+        .join("");
+    };
+
+    const lunarDayName = (d) => {
+      const nums = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
+      if (d === 10) return "初十";
+      if (d === 20) return "二十";
+      if (d === 30) return "三十";
+      if (d < 10) return `初${nums[d]}`;
+      if (d < 20) return `十${nums[d - 10]}`;
+      if (d < 30) return `廿${nums[d - 20]}`;
+      return String(d);
+    };
+
+    const lunarMonthName = (m) => lunarMonthNames[(m - 1 + 12) % 12] || "";
+
+    const jianchuSlogans = {
+      "建": "健运不息",
+      "除": "除旧迎新",
+      "满": "自满志异",
+      "平": "平心静气",
+      "定": "定志如山",
+      "执": "执善固执",
+      "破": "破而后立",
+      "危": "危中有机",
+      "成": "成己成人",
+      "收": "排序收纳",
+      "开": "开辟创新",
+      "闭": "闭门读书",
+    };
+
+    const getLunarParts = (date) => {
+      const parts = lunarPartsFormatter.formatToParts(date);
+      const y = parseLunarNumber(parts.find((p) => p.type === "year")?.value) || date.getFullYear();
+      const m = parseLunarNumber(parts.find((p) => p.type === "month")?.value) || date.getMonth() + 1;
+      const d = parseLunarNumber(parts.find((p) => p.type === "day")?.value) || date.getDate();
+      return { y, m, d };
+    };
+
+    const jianchuCycle = ["建", "除", "满", "平", "定", "执", "破", "危", "成", "收", "开", "闭"];
+    const base = new Date("2024-01-01T00:00:00Z"); // 简易循环基准
+
+    const controls = document.createElement("div");
+    controls.className = "calendar-controls";
+    const prevBtn = document.createElement("button");
+    prevBtn.type = "button";
+    prevBtn.innerText = "＜";
+    const todayBtn = document.createElement("button");
+    todayBtn.type = "button";
+    todayBtn.innerText = "今";
+    const nextBtn = document.createElement("button");
+    nextBtn.type = "button";
+    nextBtn.innerText = "＞";
+    controls.appendChild(prevBtn);
+    controls.appendChild(todayBtn);
+    controls.appendChild(nextBtn);
+
+    const header = document.createElement("div");
+    header.className = "calendar-header";
+    const headerMain = document.createElement("div");
+    headerMain.className = "calendar-header-main";
+    const headerSub = document.createElement("div");
+    headerSub.className = "calendar-header-sub";
+    const headerTerm = document.createElement("div");
+    headerTerm.className = "calendar-header-term";
+    const headerTermList = document.createElement("div");
+    headerTermList.className = "calendar-header-term-list";
+    header.appendChild(headerMain);
+    header.appendChild(headerSub);
+    header.appendChild(headerTerm);
+    header.appendChild(headerTermList);
+
+    const grid = document.createElement("div");
+    grid.className = "calendar-grid";
+
+    container.appendChild(header);
+    container.appendChild(controls);
+    container.appendChild(grid);
+
+    function getTermForDay(termsMap, month, day) {
+      const terms = termsMap[month] || [];
+      const found = terms.find((t) => t.d === day);
+      return found ? found.n : "";
+    }
+
+    function updateHeader(date) {
+      const y = date.getFullYear();
+      const m = date.getMonth() + 1;
+      const d = date.getDate();
+      const diff = Math.floor((date - base) / 86400000);
+      const jianchu = jianchuCycle[((diff % 12) + 12) % 12];
+      const slogan = jianchuSlogans[jianchu] ? ` · ${jianchuSlogans[jianchu]}` : "";
+      headerMain.innerText = `${y}年${m}月${d}日${slogan}`;
+
+      const { y: ly, m: lm, d: ld } = getLunarParts(date);
+      const lunarGZ = `${ganzhiYear(ly)}${ganzhiMonth(ly, lm)}${ganzhiDay(date)}`;
+      const lunarText = `${lunarGZ}（${toChineseYear(ly)}年） ${lunarMonthName(lm)}${lunarDayName(ld)}`;
+      headerSub.innerText = lunarText;
+      const termsMap = computeSolarTerms(y);
+      const term = getTermForDay(termsMap, m, d);
+      if (term) {
+        headerTerm.innerText = `节气：${term}`;
+      }
+    }
+
+    function getTermDiffs(date) {
+      const y = date.getFullYear();
+      const termsThisYear = computeSolarTerms(y);
+      const termsNextYear = computeSolarTerms(y + 1);
+      const todayMid = new Date(y, date.getMonth(), date.getDate()).getTime();
+
+      const collect = (map, year) =>
+        Object.entries(map).flatMap(([m, arr]) =>
+          arr.map((t) => ({
+            name: t.n,
+            date: new Date(year, Number(m) - 1, t.d).getTime(),
+          }))
+        );
+      const allTerms = [...collect(termsThisYear, y), ...collect(termsNextYear, y + 1)].sort((a, b) => a.date - b.date);
+      const next = allTerms.find((t) => t.date >= todayMid) || allTerms[0];
+      const second = allTerms.find((t) => t.date > (next ? next.date : todayMid)) || next;
+
+      const withDiff = (item) =>
+        item
+          ? {
+              name: item.name,
+              diff: Math.round((item.date - todayMid) / 86400000),
+            }
+          : null;
+
+      return {
+        next: withDiff(next),
+        next2: withDiff(second),
+      };
+    }
+
+    function updateTermList(date) {
+      // 月内列表不再固定展示
+      headerTermList.innerText = "";
+
+      const diffs = getTermDiffs(date);
+      if (diffs.next) {
+        const nextText = `节气：${diffs.next.name}（${diffs.next.diff === 0 ? "今天" : `还有${diffs.next.diff}天`}）`;
+        const next2Text =
+          diffs.next2 && diffs.next2.name !== diffs.next.name
+            ? ` / 下一节气：${diffs.next2.name}（${diffs.next2.diff === 0 ? "今天" : `还有${diffs.next2.diff}天`}）`
+            : "";
+        headerTerm.innerText = `${nextText}${next2Text}`;
+      } else {
+        headerTerm.innerText = "";
+      }
+    }
+
+    function renderGrid() {
+      grid.innerHTML = "";
+      const view = new Date(state.viewDate);
+      const year = view.getFullYear();
+      const start = new Date(year, view.getMonth(), 1);
+      const end = new Date(year, view.getMonth() + 1, 0);
+      const startWeekday = start.getDay();
+      const daysInMonth = end.getDate();
+      const termsMap = computeSolarTerms(year);
+
+      const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+      weekdays.forEach((d) => {
+        const el = document.createElement("div");
+        el.className = "calendar-cell calendar-weekday";
+        el.innerText = d;
+        grid.appendChild(el);
+      });
+
+      for (let i = 0; i < startWeekday; i++) {
+        const blank = document.createElement("div");
+        blank.className = "calendar-cell calendar-empty";
+        grid.appendChild(blank);
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(view.getFullYear(), view.getMonth(), day);
+        const cell = document.createElement("div");
+        cell.className = "calendar-cell calendar-day";
+
+        const isToday = date.getTime() === today.getTime();
+        const isSelected = date.getTime() === state.selectedDate.getTime();
+        if (isToday) cell.classList.add("calendar-today");
+        if (isSelected) cell.classList.add("calendar-selected");
+
+        const g = document.createElement("div");
+        g.className = "calendar-greg";
+        g.innerText = day;
+
+        const lunarParts = lunarDayFormatter.formatToParts(date);
+        const lunarDayNum = parseLunarNumber(lunarParts.find((p) => p.type === "day")?.value || 0);
+        const lunar = document.createElement("div");
+        lunar.className = "calendar-lunar";
+        lunar.innerText = lunarDayName(lunarDayNum);
+
+        const diff = Math.floor((date - base) / 86400000);
+        const jianchu = jianchuCycle[((diff % 12) + 12) % 12];
+        const jc = document.createElement("div");
+        jc.className = "calendar-jianchu";
+        jc.innerText = jianchu;
+
+        const termName = getTermForDay(termsMap, view.getMonth() + 1, day);
+        if (termName) {
+          const term = document.createElement("div");
+          term.className = "calendar-term-dot";
+          term.title = termName;
+          cell.appendChild(term);
+        }
+
+        cell.appendChild(g);
+        cell.appendChild(lunar);
+        cell.appendChild(jc);
+
+        cell.addEventListener("click", () => {
+          state.selectedDate = date;
+          updateHeader(date);
+          renderGrid();
+          updateTermList(date);
+        });
+
+        cell.addEventListener("mouseenter", () => {
+          if (termName) {
+            headerTerm.innerText = `节气：${termName}`;
+          }
+        });
+        cell.addEventListener("mouseleave", () => {
+          const selectedTerm = getTermForDay(
+            state.selectedDate.getMonth() + 1,
+            state.selectedDate.getDate()
+          );
+          headerTerm.innerText = selectedTerm ? `节气：${selectedTerm}` : "";
+        });
+
+        grid.appendChild(cell);
+      }
+
+      updateHeader(state.selectedDate);
+    }
+
+    prevBtn.onclick = () => {
+      state.viewDate = new Date(state.viewDate.getFullYear(), state.viewDate.getMonth() - 1, 1);
+      renderGrid();
+      updateTermList(state.selectedDate);
+    };
+    nextBtn.onclick = () => {
+      state.viewDate = new Date(state.viewDate.getFullYear(), state.viewDate.getMonth() + 1, 1);
+      renderGrid();
+      updateTermList(state.selectedDate);
+    };
+    todayBtn.onclick = () => {
+      const now = new Date();
+      state.viewDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      state.selectedDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      renderGrid();
+      updateTermList(state.selectedDate);
+    };
+
+    renderGrid();
+    updateTermList(state.selectedDate);
+  })();
+</script>
+

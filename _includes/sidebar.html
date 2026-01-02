@@ -1,0 +1,16 @@
+<aside class="sidebar">
+  <div class="sidebar-title">
+    <a class="internal-link" href="{{ '/' | relative_url }}">{{ site.title | default: "Digital Garden" }}</a>
+  </div>
+
+  <nav class="sidebar-nav">
+    <a class="internal-link" href="{{ '/' | relative_url }}">🏠 主页</a>
+    <a class="internal-link" href="{{ '/notes' | relative_url }}">📝 笔记</a>
+    <a class="internal-link" href="{{ '/graph/tags' | relative_url }}">🧠 概念图谱</a>
+    <a class="internal-link" href="{{ '/graph/links' | relative_url }}">🔗 引用图谱</a>
+  </nav>
+
+  {% include sidebar-calendar.html %}
+  {% include sidebar-tags.html %}
+</aside>
+
